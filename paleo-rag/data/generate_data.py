@@ -1,10 +1,4 @@
-"""
-Synthetic data generator for Paleo RAG system.
-
-Generates realistic paleontology museum documents in Russian,
-including exhibits, epochs, dating methods, and visitor FAQs.
-Uses deterministic seed for reproducibility.
-"""
+"""Synthetic data generator for Paleo RAG system."""
 
 import json
 import random
@@ -15,8 +9,6 @@ from tqdm import tqdm
 
 from config import config
 
-
-# === Data templates in Russian ===
 
 EPOCHS = [
     "Кембрийский период (541-485 млн лет назад)",
@@ -60,7 +52,6 @@ HALLS = [
 
 DIFFICULTIES = ["начальный", "средний", "продвинутый", "научный"]
 
-# Exhibit templates
 EXHIBIT_TEMPLATES = [
     {
         "type": "exhibit",
@@ -106,7 +97,6 @@ EXHIBIT_TEMPLATES = [
     },
 ]
 
-# Dating method templates
 DATING_TEMPLATES = [
     {
         "type": "dating_method",
@@ -138,7 +128,6 @@ DATING_TEMPLATES = [
     },
 ]
 
-# FAQ templates
 FAQ_TEMPLATES = [
     {
         "type": "faq",
@@ -212,7 +201,6 @@ FAQ_TEMPLATES = [
     },
 ]
 
-# Data for templates
 DINOSAUR_NAMES = [
     "Tyrannosaurus rex", "Triceratops horridus", "Velociraptor mongoliensis",
     "Stegosaurus stenops", "Brachiosaurus altithorax", "Diplodocus longus",
@@ -386,50 +374,47 @@ def generate_exhibit_doc(doc_id: int, template: dict[str, Any]) -> dict[str, Any
             climate_info=random.choice(CLIMATE_INFOS),
             herbivores=random.choice(HERBIVORES),
         )
-    elif "Аммонит" in template["title_template"]:
+    else:
         ammonite = random.choice(AMMONITE_GENERA)
-        epoch_start = random.choice(["девона", "карбона", "перми", "триаса", "юры", "мела"])
-        epoch_end = random.choice(["перми", "триаса", "юры", "мела", "палеогена"])
+        epoch_start = random.randint(541, 200)
+        epoch_end = epoch_start - random.randint(10, 100)
         title = template["title_template"].format(ammonite_genus=ammonite)
         content = template["content_template"].format(
-            ammonite_genus=ammonite,
             epoch_start=epoch_start,
             epoch_end=epoch_end,
             diameter=random.choice(DIAMETERS),
             location=location,
             year=random.choice(YEARS),
+            ammonite_genus=ammonite,
         )
-    else:
-        # Fallback
-        title = f"Экспонат #{doc_id}"
-        content = f"Описание экспоната №{doc_id}. Эпоха: {epoch}. Место находки: {location}."
     
     return {
         "id": doc_id,
-        "type": "exhibit",
+        "type": template["type"],
         "title": title,
         "content": content,
         "metadata": {
-            "epoch": epoch,
+            "epoch": epoch_short,
             "location": location,
             "hall": random.choice(HALLS),
             "difficulty": random.choice(DIFFICULTIES),
-        },
+        }
     }
 
 
 def generate_dating_doc(doc_id: int, template: dict[str, Any]) -> dict[str, Any]:
-    """Generate a dating method document."""
-    if "{method_name}" in template["title_template"]:
-        method = random.choice(METHOD_NAMES)
-        title = template["title_template"].format(method_name=method)
+    """Generate a dating method document from template."""
+    location = random.choice(LOCATIONS)
+    
+    if "method_name" in template["title_template"]:
+        title = template["title_template"].format(method_name=random.choice(METHOD_NAMES))
         content = template["content_template"].format(
-            method_name=method,
+            method_name=title.split(": ")[1],
             half_life=random.choice(HALF_LIFES),
             min_age=random.choice(MIN_AGES),
             max_age=random.choice(MAX_AGES),
             accuracy=random.choice(ACCURACIES),
-            location=random.choice(LOCATIONS),
+            location=location,
         )
     else:
         title = template["title_template"]
@@ -437,98 +422,91 @@ def generate_dating_doc(doc_id: int, template: dict[str, Any]) -> dict[str, Any]
     
     return {
         "id": doc_id,
-        "type": "dating_method",
+        "type": template["type"],
         "title": title,
         "content": content,
         "metadata": {
-            "epoch": "Все периоды",
-            "location": "Лаборатория",
-            "hall": "Зал эволюции жизни",
+            "epoch": "N/A",
+            "location": location,
+            "hall": "Зал палеоботаники",
             "difficulty": "продвинутый",
-        },
+        }
     }
 
 
 def generate_faq_doc(doc_id: int, template: dict[str, Any]) -> dict[str, Any]:
-    """Generate an FAQ document."""
+    """Generate an FAQ document from template."""
     title = template["title_template"]
     content = template["content_template"]
     
     return {
         "id": doc_id,
-        "type": "faq",
+        "type": template["type"],
         "title": title,
         "content": content,
         "metadata": {
-            "epoch": "Н/Д",
-            "location": "Н/Д",
-            "hall": "Информационный стенд",
+            "epoch": "N/A",
+            "location": "N/A",
+            "hall": "Интерактивный зал раскопок",
             "difficulty": random.choice(["начальный", "средний"]),
-        },
+        }
     }
 
 
-def generate_documents(num_docs: int = 200, seed: int = 42) -> list[dict[str, Any]]:
-    """
-    Generate synthetic paleontology museum documents.
+def generate_all_documents(num_docs: int = None, seed: int = None) -> list[dict[str, Any]]:
+    """Generate all synthetic documents for the paleontology museum."""
+    num_docs = num_docs or config.NUM_DOCUMENTS
+    seed = seed if seed is not None else config.RANDOM_SEED
     
-    Args:
-        num_docs: Number of documents to generate.
-        seed: Random seed for reproducibility.
-    
-    Returns:
-        List of document dictionaries.
-    """
     random.seed(seed)
-    documents = []
     
-    # Distribution: 60% exhibits, 20% dating methods, 20% FAQs
-    num_exhibits = int(num_docs * 0.6)
-    num_dating = int(num_docs * 0.2)
-    num_faqs = num_docs - num_exhibits - num_dating
-    
+    all_docs = []
     doc_id = 0
     
-    # Generate exhibits
-    for _ in tqdm(range(num_exhibits), desc="Generating exhibits"):
-        template = random.choice(EXHIBIT_TEMPLATES)
-        doc = generate_exhibit_doc(doc_id, template)
-        documents.append(doc)
+    templates_by_type = {
+        "exhibit": EXHIBIT_TEMPLATES,
+        "dating_method": DATING_TEMPLATES,
+        "faq": FAQ_TEMPLATES,
+    }
+    
+    weights = [0.6, 0.2, 0.2]
+    
+    progress_bar = tqdm(total=num_docs, desc="Generating documents")
+    
+    while doc_id < num_docs:
+        template_type = random.choices(
+            list(templates_by_type.keys()),
+            weights=weights,
+            k=1
+        )[0]
+        
+        template = random.choice(templates_by_type[template_type])
+        
+        if template_type == "exhibit":
+            doc = generate_exhibit_doc(doc_id, template)
+        elif template_type == "dating_method":
+            doc = generate_dating_doc(doc_id, template)
+        else:
+            doc = generate_faq_doc(doc_id, template)
+        
+        all_docs.append(doc)
         doc_id += 1
+        progress_bar.update(1)
     
-    # Generate dating methods
-    for _ in tqdm(range(num_dating), desc="Generating dating docs"):
-        template = random.choice(DATING_TEMPLATES)
-        doc = generate_dating_doc(doc_id, template)
-        documents.append(doc)
-        doc_id += 1
+    progress_bar.close()
     
-    # Generate FAQs
-    for _ in tqdm(range(num_faqs), desc="Generating FAQs"):
-        template = random.choice(FAQ_TEMPLATES)
-        doc = generate_faq_doc(doc_id, template)
-        documents.append(doc)
-        doc_id += 1
-    
-    # Shuffle for variety
-    random.shuffle(documents)
-    
-    # Reassign IDs after shuffle
-    for i, doc in enumerate(documents):
-        doc["id"] = i
-    
-    return documents
+    return all_docs
 
 
-def save_documents(documents: list[dict[str, Any]], output_path: Path) -> None:
+def save_documents(docs: list[dict[str, Any]], output_path: Path) -> None:
     """Save documents to JSONL file."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
     
     with open(output_path, "w", encoding="utf-8") as f:
-        for doc in documents:
+        for doc in docs:
             f.write(json.dumps(doc, ensure_ascii=False) + "\n")
-    
-    print(f"Saved {len(documents)} documents to {output_path}")
+
+
 
 
 def load_documents(input_path: Path) -> list[dict[str, Any]]:
@@ -537,27 +515,19 @@ def load_documents(input_path: Path) -> list[dict[str, Any]]:
     
     with open(input_path, "r", encoding="utf-8") as f:
         for line in f:
-            documents.append(json.loads(line.strip()))
+            doc = json.loads(line.strip())
+            documents.append(doc)
     
     return documents
-
-
-def main() -> None:
+def main():
     """Main entry point for data generation."""
     print(f"Generating {config.NUM_DOCUMENTS} synthetic documents...")
-    print(f"Random seed: {config.RANDOM_SEED}")
-    print(f"Output path: {config.RAW_DATA_FILE}")
     
-    documents = generate_documents(
-        num_docs=config.NUM_DOCUMENTS,
-        seed=config.RANDOM_SEED,
-    )
+    docs = generate_all_documents()
     
-    save_documents(documents, config.RAW_DATA_FILE)
+    save_documents(docs, config.RAW_DATA_FILE)
     
-    # Print sample
-    print("\n=== Sample document ===")
-    print(json.dumps(documents[0], ensure_ascii=False, indent=2))
+    print(f"Documents saved to {config.RAW_DATA_FILE}")
 
 
 if __name__ == "__main__":
