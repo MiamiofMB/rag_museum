@@ -40,11 +40,30 @@ class Embedder:
     
     @property
     def model(self) -> SentenceTransformer:
-        """Lazy-load the model."""
+        """Lazy-load the model with retry logic."""
         if self._model is None:
             logger.info(f"Loading model: {self.model_name}")
-            self._model = SentenceTransformer(self.model_name)
-            self._model.eval()  # Set to evaluation mode
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    self._model = SentenceTransformer(
+                        self.model_name,
+                        trust_remote_code=True,
+                    )
+                    self._model.eval()
+                    logger.info(f"Model loaded successfully on attempt {attempt + 1}")
+                    break
+                except Exception as e:
+                    if attempt < max_retries - 1:
+                        logger.warning(
+                            f"Failed to load model (attempt {attempt + 1}/{max_retries}): {e}. "
+                            f"Retrying in {2 ** attempt} seconds..."
+                        )
+                        import time
+                        time.sleep(2 ** attempt)
+                    else:
+                        logger.error(f"Failed to load model after {max_retries} attempts: {e}")
+                        raise
         return self._model
     
     def encode(
