@@ -117,7 +117,6 @@ def create_ui() -> gr.Blocks:
     
     with gr.Blocks(
         title="Paleo RAG — Палеонтологический Музей",
-        theme=gr.themes.Soft(),
     ) as ui:
         
         gr.Markdown("""
@@ -166,7 +165,6 @@ def create_ui() -> gr.Blocks:
                 answer_output = gr.Textbox(
                     label="Ответ эксперта",
                     lines=6,
-                    show_copy_button=True,
                 )
             
             with gr.Column(scale=2):

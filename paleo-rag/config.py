@@ -20,7 +20,7 @@ class Config(BaseSettings):
     RAW_DATA_FILE: Path = Path("./data/raw_synthetic.jsonl")
     FAISS_INDEX_PATH: Path = Path("./index/faiss_index")
 
-    EMBEDDING_MODEL: str = "intfloat/multilingual-e5-small"
+    EMBEDDING_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
     LLM_MODEL: str = "qwen2.5:7b"
     LLM_BASE_URL: str = "http://localhost:11434"
 

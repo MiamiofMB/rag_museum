@@ -30,17 +30,17 @@ class VectorStore:
     def __init__(
         self,
         index_path: Path | None = None,
-        embedding_dim: int = 512,
+        embedding_dim: int | None = None,
     ):
         """
         Initialize the vector store.
         
         Args:
             index_path: Path to save/load the FAISS index.
-            embedding_dim: Dimension of embeddings (512 for bge-small-ru).
+            embedding_dim: Dimension of embeddings (auto-detected if not provided).
         """
         self.index_path = index_path or config.FAISS_INDEX_PATH
-        self.embedding_dim = embedding_dim
+        self.embedding_dim = embedding_dim or 384  # Default for all-MiniLM-L6-v2
         self._index: faiss.Index | None = None
         self._chunk_map: dict[str, Chunk] = {}
         self._id_to_idx: dict[str, int] = {}
@@ -71,14 +71,24 @@ class VectorStore:
                 "must have the same length"
             )
         
-        logger.info(f"Creating FAISS index with {len(embeddings)} vectors...")
+        # Update embedding dimension from actual embeddings
+        actual_dim = embeddings.shape[1]
+        if self.embedding_dim != actual_dim:
+            logger.info(f"Updating embedding dimension from {self.embedding_dim} to {actual_dim}")
+            self.embedding_dim = actual_dim
+        
+        logger.info(f"Creating FAISS index with {len(embeddings)} vectors of dimension {self.embedding_dim}...")
         
         # Use IndexFlatIP for inner product (works with normalized embeddings)
         # which is equivalent to cosine similarity
         self._index = faiss.IndexFlatIP(self.embedding_dim)
         
+        # Normalize embeddings for cosine similarity
+        embeddings_normalized = embeddings.copy()
+        faiss.normalize_L2(embeddings_normalized)
+        
         # Add embeddings to index
-        self._index.add(np.ascontiguousarray(embeddings, dtype=np.float32))
+        self._index.add(np.ascontiguousarray(embeddings_normalized, dtype=np.float32))
         
         # Build chunk mapping
         self._chunk_map = {}
@@ -98,7 +108,7 @@ class VectorStore:
             path: Optional path override.
         """
         save_path = path or self.index_path
-        save_path.parent.mkdir(parents=True, exist_ok=True)
+        save_path.mkdir(parents=True, exist_ok=True)
         
         if self._index is None:
             raise RuntimeError("No index to save")
@@ -229,7 +239,8 @@ def build_vector_store(
     Returns:
         Initialized and populated VectorStore.
     """
-    store = VectorStore(index_path=save_path)
+    embedding_dim = embeddings.shape[1]
+    store = VectorStore(index_path=save_path, embedding_dim=embedding_dim)
     store.create_index(embeddings, chunks)
     
     if save_path:
